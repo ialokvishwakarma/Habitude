@@ -4,12 +4,14 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 
 @Getter
@@ -23,7 +25,7 @@ public class Habit {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name="user_id",nullable = false, foreignKey = @ForeignKey(name = "fk_habit_user"))
+    @JoinColumn(name = "user_id", nullable = false, foreignKey = @ForeignKey(name = "fk_habit_user"))
     @JsonIgnore
     private User user;
 
@@ -35,7 +37,6 @@ public class Habit {
     @Size(max = 150)
     @Column(length = 150)
     private String description;
-
 
 
     @Enumerated(EnumType.STRING)
@@ -65,7 +66,7 @@ public class Habit {
     private List<Activity> activities;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "focus_id",nullable = false)
+    @JoinColumn(name = "focus_id", nullable = false)
     private Focus focus;
 
 

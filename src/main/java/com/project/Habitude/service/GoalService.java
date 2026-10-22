@@ -12,12 +12,13 @@ import com.project.Habitude.model.User;
 import com.project.Habitude.repository.FocusRepository;
 import com.project.Habitude.repository.GoalRepository;
 import com.project.Habitude.repository.UserRepository;
+import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
+import org.springframework.cache.annotation.CacheConfig;
 import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -27,6 +28,7 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@CacheConfig(cacheNames = "goals")
 public class GoalService {
 
     private final UserRepository userRepository;
@@ -35,7 +37,7 @@ public class GoalService {
     private final FocusRepository focusRepository;
 
 
-//    @CacheEvict(value = "goals", allEntries = true)
+    @CacheEvict(key = "#authentication.name")
     public GoalResponseDTO createGoal(Authentication authentication, GoalRequestDTO requestDTO) {
         String email = authentication.getName();
         User user = userRepository.findByEmail(email);
@@ -66,7 +68,7 @@ public class GoalService {
         return response;
     }
 
-//    @Cacheable(value = "goals",key = "#authentication.name+'_list'")
+    @Cacheable(key = "#authentication.name")
     public List<GoalResponseDTO> getAllGoals(@Valid Authentication authentication)  {
         log.info("Loading data from Database");
         String email = authentication.getName();
@@ -86,7 +88,8 @@ public class GoalService {
 
     }
 
-//    @CacheEvict(value = "goals",key = "#authentication.name")
+    @Transactional
+    @CacheEvict(key = "#authentication.name")
     public void delete(@Valid Authentication authentication, Long id) {
         String email = authentication.getName();
         User user = userRepository.findByEmail(email);
@@ -103,7 +106,8 @@ public class GoalService {
         log.info("Goal Deleted");
     }
 
-//    @CachePut(value = "goals",key = "#authentication.name")
+    @Transactional
+    @CacheEvict(key = "#authentication.name")
     public GoalResponseDTO update(Long id, UpdateGoalRequest request, Authentication authentication) {
         String email = authentication.getName();
         User user = userRepository.findByEmail(email);
@@ -132,7 +136,8 @@ public class GoalService {
         return modelMapper.map(updated,GoalResponseDTO.class);
     }
 
-//    @CachePut(value = "goals",key = "#authentication.name")
+    @Transactional
+    @CacheEvict(key = "#authentication.name")
     public GoalResponseDTO updateStatus(@Valid Long id, GoalStatusRequest statusRequest, Authentication authentication) {
         String email = authentication.getName();
         User user = userRepository.findByEmail(email);

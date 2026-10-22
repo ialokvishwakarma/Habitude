@@ -33,10 +33,15 @@ public class Activity {
     @Column(length = 150)
     private String description;
 
-
    private Double value;
 
    private String customUnit;
+
+   @Enumerated(EnumType.STRING)
+   private ReferenceCategory referenceCategory;
+
+   @Enumerated(EnumType.STRING)
+   private ReferenceUnit referenceUnit;
 
     private Instant activityDateTime;
 

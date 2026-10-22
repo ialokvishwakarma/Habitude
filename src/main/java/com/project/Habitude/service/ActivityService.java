@@ -1,5 +1,6 @@
 package com.project.Habitude.service;
 
+import com.project.Habitude.config.CacheEvictionService;
 import com.project.Habitude.dto.ActivityRequest;
 import com.project.Habitude.dto.ActivityResponse;
 import com.project.Habitude.dto.ActivityUpdateRequestDTO;
@@ -7,17 +8,16 @@ import com.project.Habitude.exceptions.AccessDeniedExceptionUser;
 import com.project.Habitude.exceptions.ActivityNotFoundException;
 import com.project.Habitude.model.*;
 import com.project.Habitude.repository.*;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.modelmapper.ModelMapper;
+import org.springframework.cache.annotation.CacheConfig;
 import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
-import org.modelmapper.ModelMapper;
 
 import java.time.DayOfWeek;
 import java.time.Instant;
@@ -29,6 +29,7 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@CacheConfig(cacheNames = "activities")
 public class ActivityService {
 
     private final ActivityRepository activityRepository;
@@ -37,122 +38,155 @@ public class ActivityService {
     private final GoalRepository goalRepository;
     private final HabitRepository habitRepository;
     private final FocusRepository focusRepository;
+    private final CacheEvictionService cacheEvictionService;
 
-
-//    @CacheEvict(value = "activities", allEntries = true)
-    public ActivityResponse add(ActivityRequest activityRequest, Authentication authentication ) {
-        log.info("Entry");
+    @Transactional
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "activities", key = "#authentication.name"),
+            @CacheEvict(cacheNames = "goals", key = "#authentication.name"),
+            @CacheEvict(cacheNames = "habits", key = "#authentication.name")
+    })
+    public ActivityResponse add(ActivityRequest activityRequest, Authentication authentication) {
         String email = authentication.getName();
         User user = userRepository.findByEmail(email);
-        Habit habit = habitRepository.findById(activityRequest.getHabitId()).orElse(null);
-        Focus focus = focusRepository.findById(activityRequest.getFocusId()).orElse(null);
-        String habitTitle = "";
-        String focusName = "";
-        if(habit!=null) {
-            habitTitle = habit.getTitle();
+
+        if (activityRequest.getFocusId() == null) {
+            throw new IllegalArgumentException("Focus ID must not be null");
         }
-        if(focus!=null){
-            focusName = focus.getName();
-        }
-        String customUnit = activityRequest.getCustomUnit();
-        customUnit  = customUnit.trim().toLowerCase();
+
+        Focus focus = focusRepository.findById(activityRequest.getFocusId())
+                .orElseThrow(() -> new RuntimeException("Focus not found with id: " + activityRequest.getFocusId()));
+
         Activity activity = new Activity();
         activity.setTitle(activityRequest.getTitle());
         activity.setDescription(activityRequest.getDescription());
-        activity.setValue(activityRequest.getValue());
-        activity.setCustomUnit(customUnit);
-        activity.setActivityDateTime(activityRequest.getActivityDateTime());
-        activity.setHabit(habit);
-        activity.setFocus(focus);
-        activity.setId(null);
+        activity.setValue(activityRequest.getValue() != null ? activityRequest.getValue() : 0.0);
+        activity.setCustomUnit(activityRequest.getCustomUnit());
+
+        Instant actTime = activityRequest.getActivityDateTime() != null
+                ? activityRequest.getActivityDateTime()
+                : Instant.now();
+        activity.setActivityDateTime(actTime);
         activity.setUser(user);
-        activity.setHabit(habit);
         activity.setFocus(focus);
-        Activity savedActivity = activityRepository.save(activity);
-        log.info("saved activity");
-        updateGoalProgress(user.getId(), focus,savedActivity.getCustomUnit(),savedActivity.getActivityDateTime(), activity.getValue());
-        updateHabitProgress(user.getId(), focus,customUnit,activityRequest.getActivityDateTime(), activityRequest.getValue());
-        log.info("Activity added successfully for user: {}",authentication.getName());
-        ActivityResponse response = modelMapper.map(savedActivity,ActivityResponse.class);
-        response.setHabitTitle(habitTitle);
-        response.setFocusName(focusName);
+
+        if (activityRequest.getHabitId() != null) {
+            Habit habit = habitRepository.findById(activityRequest.getHabitId()).orElse(null);
+            activity.setHabit(habit);
+        }
+
+        Activity saved = activityRepository.save(activity);
+
+        try {
+            updateGoalProgress(user.getId(), focus, saved.getCustomUnit(), saved.getActivityDateTime(), saved.getValue());
+            updateHabitProgress(user.getId(), focus, saved.getCustomUnit(), saved.getActivityDateTime(), saved.getValue());
+        } catch (Exception e) {
+            log.error("Failed to propagate progress to goals/habits: {}", e.getMessage(), e);
+        }
+
+        ActivityResponse response = modelMapper.map(saved, ActivityResponse.class);
+        response.setFocusName(focus.getName());
+        if (saved.getHabit() != null) {
+            response.setHabitTitle(saved.getHabit().getTitle());
+        }
+
+        cacheEvictionService.evictUserAiRecommendations(authentication.getName());
         return response;
     }
 
-//    @Cacheable(value = "activities",key = "#authentication.name + '_' + #page + '_' + #size")
-    public Page<ActivityResponse> findByUser(Authentication authentication, int page, int size) {
-        log.info("CACHE MISS - Fetching from DataBase: {}", authentication.getName());
+    @Cacheable(key = "#authentication.name")
+    public List<ActivityResponse> findByUser(Authentication authentication) {
+        log.info("CACHE MISS - Fetching activities from Database for user: {}", authentication.getName());
         String email = authentication.getName();
         User user = userRepository.findByEmail(email);
 
-        Pageable pageable = PageRequest.of(page, size);
-        Page<Activity> activities = activityRepository.findByUserId(user.getId(), pageable);
-        if(activities.isEmpty()){
-            log.warn("Activity not present for user: {}",authentication.getName());
-            throw new ActivityNotFoundException("Activity not found with Id : ",user.getId());
+        List<Activity> activities = activityRepository.findByUserIdOrderByActivityDateTimeDesc(user.getId());
+        if (activities.isEmpty()) {
+            throw new ActivityNotFoundException("Activity not found for user: ", user.getId());
         }
 
-        log.info("Activity returned successfully for user: {}",authentication.getName());
-
-        return activities.map(activity -> modelMapper.map(activity, ActivityResponse.class));
+        return activities.stream()
+                .map(activity -> {
+                    ActivityResponse response = modelMapper.map(activity, ActivityResponse.class);
+                    if (activity.getFocus() != null) {
+                        response.setFocusName(activity.getFocus().getName());
+                    }
+                    if (activity.getHabit() != null) {
+                        response.setHabitTitle(activity.getHabit().getTitle());
+                    }
+                    return response;
+                })
+                .toList();
     }
 
-//    @CacheEvict(value = "activities", key = "#authentication.name + '_0_10'")
-    public void deleteActivityById(Long id,Authentication authentication) {
+    @Transactional
+    @CacheEvict(cacheNames = "activities", key = "#authentication.name")
+    public void deleteActivityById(Long id, Authentication authentication) {
         String email = authentication.getName();
         User user = userRepository.findByEmail(email);
         Activity activity = activityRepository.findById(id).orElseThrow(
-                ()-> new ActivityNotFoundException("Activity not found with Id : ",id)
+                () -> new ActivityNotFoundException("Activity not found with Id : ", id)
         );
-        if(!activity.getUser().getId().equals(user.getId())){
+        if (!activity.getUser().getId().equals(user.getId())) {
             throw new AccessDeniedExceptionUser("Access Denied");
         }
-        log.info("Activity deleted with id: {}",id);
-        activityRepository.deleteById(user.getId());
-
+        log.info("Activity deleted with id: {}", id);
+        activityRepository.deleteById(id);
     }
 
-
-    //Activity cannot be updated in first phase so this method does not work properly
-//    @CachePut(value = "activities", key = "#authentication.name + '_0_10'")
-    public ActivityResponse updateActivity(Long id,ActivityUpdateRequestDTO updateRequestDTO, Authentication authentication) {
+    @Transactional
+    @CacheEvict(cacheNames = "activities", key = "#authentication.name")
+    public ActivityResponse updateActivity(Long id, ActivityUpdateRequestDTO updateRequestDTO, Authentication authentication) {
         String email = authentication.getName();
         User user = userRepository.findByEmail(email);
-        Activity activity = activityRepository.findById(id).orElseThrow(
-                ()-> new ActivityNotFoundException("Activity not found with Id : ",id)
-        );
-        if(!activity.getUser().getId().equals(user.getId())){
-            throw new AccessDeniedExceptionUser("Access Denied");
-        }
 
-        Focus focus = focusRepository.findById(updateRequestDTO.getFocusId()).orElse(null);
-        if(focus!=null){
-            activity.setFocus(focus);
-        }
+        Activity activity = activityRepository.findByIdAndUserId(id, user.getId())
+                .orElseThrow(() -> new RuntimeException("Activity not found with id: " + id));
+
+        Focus focus = focusRepository.findByIdAndUserId(updateRequestDTO.getFocusId(), user.getId())
+                .orElseThrow(() -> new RuntimeException("Focus area not found with id: " + updateRequestDTO.getFocusId()));
+
+        activity.setTitle(updateRequestDTO.getTitle());
+        activity.setDescription(updateRequestDTO.getDescription());
+        activity.setValue(updateRequestDTO.getValue());
+        activity.setFocus(focus);
 
         Activity updated = activityRepository.save(activity);
-//        updateGoalProgress(user.getId(), updated.getActivityCategory());
-        return modelMapper.map(updated,ActivityResponse.class);
+
+        ActivityResponse response = modelMapper.map(updated, ActivityResponse.class);
+        response.setFocusName(focus.getName());
+        return response;
     }
 
+    public void updateGoalProgress(Long userId, Focus focus, String customUnit, Instant activityDateTime, Double value) {
+        if (value == null || value <= 0) return;
 
-//    @CacheEvict(value = "goals", allEntries = true)
-    public void updateGoalProgress(Long userId, Focus focus, String customUnit, Instant activityDateTime,Double value){
-        List<Goal> goals = goalRepository.findByUserIdAndFocusId(userId,focus.getId());
+        List<Goal> goals = goalRepository.findByUserIdAndFocusId(userId, focus.getId());
+        if (goals.isEmpty()) return;
 
-        LocalDate activityDate =
-                activityDateTime.atZone(ZoneOffset.UTC).toLocalDate();
+        LocalDate activityDate = activityDateTime != null
+                ? activityDateTime.atZone(ZoneOffset.UTC).toLocalDate()
+                : LocalDate.now();
 
-        for(Goal goal : goals){
-            if(goal.getCustomUnit().equals(customUnit)
-                    && !activityDate.isBefore(goal.getStartDate())
-                    && !activityDate.isAfter(goal.getEndDate())){
-                goal.setTotalProgress(goal.getTotalProgress()+value);
+        for (Goal goal : goals) {
+            boolean unitMatches = (goal.getCustomUnit() == null && customUnit == null) ||
+                    (goal.getCustomUnit() != null && goal.getCustomUnit().equalsIgnoreCase(customUnit));
 
-                if(goal.getTotalProgress()>=goal.getTargetValue()){
+            if (!unitMatches) continue;
+
+            boolean withinStart = goal.getStartDate() == null || !activityDate.isBefore(goal.getStartDate());
+            boolean withinEnd = goal.getEndDate() == null || !activityDate.isAfter(goal.getEndDate());
+
+            if (withinStart && withinEnd) {
+                double current = goal.getTotalProgress() != null ? goal.getTotalProgress() : 0.0;
+                double newProgress = current + value;
+                 goal.setTotalProgress(newProgress);
+
+                 double target = goal.getTargetValue() != null ? goal.getTargetValue() : 0.0;
+                if (target > 0 && newProgress >= target) {
                     goal.setStatus(GoalStatus.DONE);
-                }else{
-                    goal.setStatus(GoalStatus.IN_PROGRESS);
+                } else {
+                     goal.setStatus(GoalStatus.IN_PROGRESS);
                 }
             }
         }
@@ -167,34 +201,34 @@ public class ActivityService {
             Instant activityDateTime,
             Double value) {
 
-        List<Habit> habits =
-                habitRepository.findByUserIdAndFocusIdAndCustomUnit(
-                        userId, focus.getId(), customUnit);
+        if (activityDateTime == null) return;
+
+        List<Habit> habits = habitRepository.findByUserIdAndFocusIdAndCustomUnit(
+                userId, focus.getId(), customUnit);
 
         for (Habit habit : habits) {
-
+            if (habit.getFrequency() == null) continue;
             LocalDate activityDate = activityDateTime.atZone(ZoneOffset.UTC).toLocalDate();
-
-            LocalDate startDate;
-            LocalDate endDate;
+             LocalDate startDate;
+             LocalDate endDate;
             LocalDate prevStartDate;
-            LocalDate prevEndDate;
+             LocalDate prevEndDate;
 
             switch (habit.getFrequency()) {
                 case DAILY -> {
                     startDate = activityDate;
-                    endDate = startDate.plusDays(1);
+                     endDate = startDate.plusDays(1);
                     prevStartDate = startDate.minusDays(1);
                     prevEndDate = startDate;
                 }
                 case WEEKLY -> {
                     startDate = activityDate.with(DayOfWeek.MONDAY);
                     endDate = startDate.plusWeeks(1);
-                    prevStartDate = startDate.minusWeeks(1);
+                     prevStartDate = startDate.minusWeeks(1);
                     prevEndDate = startDate;
                 }
                 case MONTHLY -> {
-                    startDate = activityDate.withDayOfMonth(1);
+                     startDate = activityDate.withDayOfMonth(1);
                     endDate = startDate.plusMonths(1);
                     prevStartDate = startDate.minusMonths(1);
                     prevEndDate = startDate;
@@ -207,30 +241,29 @@ public class ActivityService {
             Instant prevStart = prevStartDate.atStartOfDay(ZoneOffset.UTC).toInstant();
             Instant prevEnd = prevEndDate.atStartOfDay(ZoneOffset.UTC).toInstant();
 
-            List<Activity> activities =
-                    activityRepository
-                            .findByUserIdAndHabitAndActivityDateTimeGreaterThanEqualAndActivityDateTimeLessThan(
-                                    userId, habit, start, end);
+            List<Activity> activities = activityRepository
+                    .findByUserIdAndHabitAndActivityDateTimeGreaterThanEqualAndActivityDateTimeLessThan(
+                            userId, habit, start, end);
+            double totalValue = activities.stream()
+                    .mapToDouble(a -> a.getValue() != null ? a.getValue() : 0.0)
+                    .sum();
 
-            double totalValue = activities.stream().mapToDouble(Activity::getValue).sum();
-
-            if (totalValue < habit.getTargetValue()) {
-                continue; // not completed, nothing to update
+            double target = habit.getTargetValue() != null ? habit.getTargetValue() : 1.0;
+            if (totalValue < target) {
+                continue;
             }
 
             Instant lastCompletedAt = habit.getLastCompletedAt();
 
-            // Was this exact period already completed by a prior activity?
             boolean alreadyCompletedThisPeriod =
                     lastCompletedAt != null
                             && !lastCompletedAt.isBefore(start)
                             && lastCompletedAt.isBefore(end);
 
             if (alreadyCompletedThisPeriod) {
-                continue; // don't re-trigger streak/lastCompletedAt/status
+                continue;
             }
 
-            // Was the immediately preceding period completed? -> continue streak, else reset
             boolean previousPeriodCompleted =
                     lastCompletedAt != null
                             && !lastCompletedAt.isBefore(prevStart)
@@ -243,12 +276,7 @@ public class ActivityService {
             int longestStreak = habit.getLongestStreak() == null ? 0 : habit.getLongestStreak();
             habit.setLongestStreak(Math.max(longestStreak, currentStreak));
 
-            // lastCompletedAt should be the timestamp of the activity that pushed total over target,
-            // not just the current activity's timestamp — find the earliest-in-time activity at which
-            // the cumulative sum first reached targetValue.
-            habit.setLastCompletedAt(
-                    findCompletionTimestamp(activities, habit.getTargetValue())
-            );
+            habit.setLastCompletedAt(findCompletionTimestamp(activities, target));
 
             if (habit.getStatus() != HabitStatus.ACTIVE) {
                 habit.setStatus(HabitStatus.ACTIVE);
@@ -260,16 +288,17 @@ public class ActivityService {
 
     private Instant findCompletionTimestamp(List<Activity> activities, double targetValue) {
         List<Activity> sorted = activities.stream()
+                .filter(a -> a.getActivityDateTime() != null)
                 .sorted(Comparator.comparing(Activity::getActivityDateTime))
                 .toList();
+
         double running = 0;
         for (Activity a : sorted) {
-            running += a.getValue();
+            running += (a.getValue() != null ? a.getValue() : 0.0);
             if (running >= targetValue) {
                 return a.getActivityDateTime();
             }
         }
-        // fallback, shouldn't happen since caller already checked total >= target
-        return sorted.get(sorted.size() - 1).getActivityDateTime();
+        return sorted.isEmpty() ? Instant.now() : sorted.get(sorted.size() - 1).getActivityDateTime();
     }
 }

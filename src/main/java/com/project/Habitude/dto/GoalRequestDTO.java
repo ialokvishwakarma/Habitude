@@ -1,6 +1,5 @@
 package com.project.Habitude.dto;
 
-import com.project.Habitude.model.ActivityCategory;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.AllArgsConstructor;
@@ -14,10 +13,10 @@ import java.time.LocalDate;
 @AllArgsConstructor
 @NoArgsConstructor
 public class GoalRequestDTO {
-    @Length(max = 15)
+    @Length(max = 50)
     private String title;
 
-    @Length(min = 20, max = 100)
+    @Length(max = 300)
     private String description;
 
     @NotNull

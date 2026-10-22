@@ -7,10 +7,11 @@ import com.project.Habitude.service.ActivityService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -32,12 +33,12 @@ public class ActivityController {
     }
 
     @GetMapping("/my-activities")
-    public ResponseEntity<Page<ActivityResponse>> getActivities(@Valid
+    public ResponseEntity<List<ActivityResponse>> getActivities(@Valid
                                                                 Authentication authentication,
-                                                                      @RequestParam(defaultValue = "0") int page,
-    @RequestParam(defaultValue = "10") int size){
+                                                                @RequestParam(defaultValue = "0") int page,
+                                                                @RequestParam(defaultValue = "10") int size){
         log.info("My Activity List Request");
-        return ResponseEntity.ok(activityService.findByUser(authentication,page,size));
+        return ResponseEntity.ok(activityService.findByUser(authentication));
     }
 
     @DeleteMapping("/delete/{id}")

@@ -45,6 +45,8 @@ public class User {
     @Enumerated(EnumType.STRING)
     private AuthProviderType providerType;
 
+    private Integer age;
+
     // Database relationship between tables
     @OneToMany(mappedBy = "user",cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonIgnore

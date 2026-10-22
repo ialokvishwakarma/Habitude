@@ -13,21 +13,25 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
+import org.springframework.cache.annotation.CacheConfig;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@CacheConfig(cacheNames = "habits")
 public class HabitService {
     private final UserRepository userRepository;
     private final ModelMapper modelMapper;
     private final HabitRepository habitRepository;
     private final FocusRepository focusRepository;
 
+    @CacheEvict(key = "#authentication.name")
     public HabitResponseDTO addHabit(@Valid HabitRequestDTO habitRequestDTO, Authentication authentication) {
         String email = authentication.getName();
         User user = userRepository.findByEmail(email);
@@ -61,6 +65,7 @@ public class HabitService {
         return response;
     }
 
+    @Cacheable(key = "#authentication.name")
     public List<HabitResponseDTO> getAllHabit(Authentication authentication) {
         String email = authentication.getName();
         User user = userRepository.findByEmail(email);

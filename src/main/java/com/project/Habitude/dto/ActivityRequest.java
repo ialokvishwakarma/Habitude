@@ -1,7 +1,7 @@
 package com.project.Habitude.dto;
 
-import com.project.Habitude.model.ActivityCategory;
-
+import com.project.Habitude.model.ReferenceCategory;
+import com.project.Habitude.model.ReferenceUnit;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -23,6 +23,10 @@ public class ActivityRequest {
     @Positive
     private Double value;
     private String customUnit;
+
+    private ReferenceCategory referenceCategory;
+    private ReferenceUnit referenceUnit;
+
     @NotNull
     private Instant activityDateTime;
     private Long habitId;

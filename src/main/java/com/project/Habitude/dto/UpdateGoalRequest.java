@@ -1,6 +1,5 @@
 package com.project.Habitude.dto;
 
-import com.project.Habitude.model.ActivityCategory;
 import com.project.Habitude.model.GoalStatus;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -15,14 +14,15 @@ import java.time.LocalDate;
 @AllArgsConstructor
 @NoArgsConstructor
 public class UpdateGoalRequest {
-    @Length(max = 15)
+    @Length(max = 50)
     private String title;
-    @Length(min = 20, max = 100)
+    @Length(max = 300)
     private String description;
     @NotNull
     private Long focusId;
 
-    private GoalStatus goalStatus;
+    private GoalStatus status;
+    private String customUnit;
 
     @Positive
     private Double targetValue;

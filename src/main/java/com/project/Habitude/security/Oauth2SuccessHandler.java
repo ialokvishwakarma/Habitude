@@ -11,25 +11,29 @@ import org.springframework.security.oauth2.client.authentication.OAuth2Authentic
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
-import tools.jackson.databind.ObjectMapper;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
 
 @Component
 @RequiredArgsConstructor
-public class Oauth2SuccessHandler  implements AuthenticationSuccessHandler {
+public class Oauth2SuccessHandler implements AuthenticationSuccessHandler {
 
     private final AuthService authService;
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
         OAuth2AuthenticationToken token = (OAuth2AuthenticationToken) authentication;
-        OAuth2User oAuth2User = ((OAuth2AuthenticationToken) authentication).getPrincipal();
+        OAuth2User oAuth2User = token.getPrincipal();
 
-        LoginResponse loginResponse = authService.handleOauth2LoginRequest(oAuth2User,"google");
+        LoginResponse loginResponse = authService.handleOauth2LoginRequest(oAuth2User, "google");
 
-        response.setContentType("application/json");
 
-        new ObjectMapper().writeValue(response.getWriter(),loginResponse);
+        String targetUrl = UriComponentsBuilder.fromUriString("http://localhost:5173")
+                .queryParam("token", loginResponse.getToken())
+                .queryParam("refreshToken", loginResponse.getRefreshToken())
+                .build().toUriString();
+
+        response.sendRedirect(targetUrl);
     }
 }

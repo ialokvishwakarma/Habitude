@@ -41,7 +41,7 @@ public class GoalController {
    @DeleteMapping("/delete/{id}")
     public ResponseEntity<Void> deleteGoal(@Valid
                                            Authentication authentication,
-                                           Long id){
+                                           @PathVariable Long id){
         log.info("Delete Goal Request");
         goalService.delete(authentication,id);
         return ResponseEntity.noContent().build();
