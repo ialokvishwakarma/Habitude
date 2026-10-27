@@ -8,10 +8,10 @@ import org.springframework.cache.annotation.EnableCaching;
 @Slf4j
 @EnableCaching
 @SpringBootApplication
-public class Habitude {
+public class HabitudeApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.run(Habitude.class, args);
+		SpringApplication.run(HabitudeApplication.class, args);
 		log.info("Application Started Successfully");
 		System.out.println("Hello Developer");
 	}
