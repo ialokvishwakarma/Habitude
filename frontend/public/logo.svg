@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <!-- Brand Background Rounded Card -->
+  <rect width="48" height="48" rx="12" fill="#2563eb"/>
+  
+  <!-- Subtle Growth / Focus Loop -->
+  <path 
+    d="M14 24C14 18.477 18.477 14 24 14C29.523 14 34 18.477 34 24" 
+    stroke="#93c5fd" 
+    stroke-width="3" 
+    stroke-linecap="round" 
+    fill="none" 
+    opacity="0.6"
+  />
+  
+  <!-- Bold Habit Check / Arrow Mark -->
+  <path 
+    d="M16 25.5L22 31.5L33 19" 
+    stroke="#ffffff" 
+    stroke-width="4.2" 
+    stroke-linecap="round" 
+    stroke-linejoin="round" 
+    fill="none"
+  />
+</svg>
