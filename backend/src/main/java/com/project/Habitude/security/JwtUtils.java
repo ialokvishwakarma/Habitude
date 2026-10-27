@@ -8,6 +8,7 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import jakarta.servlet.http.HttpServletRequest;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Component;
@@ -18,10 +19,10 @@ import java.util.Date;
 @Component
 public class JwtUtils {
 
-    @Value("${security.jwtKey}")
+    @Value("${security.jwtKey:${JWT_SECRET_KEY:HabitudeSuperSecretKeyMustBeAtLeast32BytesLongForHmacSha256}}")
     private String jwtSecret;
 
-    @Value("${security.expirationTime}")
+    @Value("${security.expirationTime:${JWT_EXPIRATION_TIME:86400000}}")
     private int jwtExpirationTime;
 
     public String getJwtFromHeader(HttpServletRequest request){
