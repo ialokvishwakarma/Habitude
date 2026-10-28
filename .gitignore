@@ -33,7 +33,7 @@ build/
 .vscode/
 
 ## Application Properties  ##
-application.properties
+
 .env
 
 #Springboot logs
