@@ -18,6 +18,11 @@ public class UserController {
 
     private final UserService userService;
 
+    @GetMapping("/profile/test")
+    public ResponseEntity<String> getProfileTest() {
+        return ResponseEntity.ok("Profile endpoint works");
+    }
+
     @GetMapping("/profile")
     public ResponseEntity<UserProfileResponseDTO> getProfile(Authentication authentication) {
         log.info("Fetching profile for user: {}", authentication.getName());
