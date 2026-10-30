@@ -12,27 +12,57 @@ export default function DashboardOverview() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function loadStats() {
-      try {
-        const [focusData, activityPage, habitData, goalData] = await Promise.all([
-          focusService.getMyFocuses(),
-          activityService.getActivities(0, 5),
-          habitService.getMyHabits(),
-          goalService.getMyGoals(),
-        ]);
-        setMetrics({
-          focus: Array.isArray(focusData) ? focusData.length : 0,
-          activities: activityPage?.totalElements || activityPage?.content?.length || 0,
-          habits: Array.isArray(habitData) ? habitData.length : 0,
-          goals: Array.isArray(goalData) ? goalData.length : 0,
-        });
-        setRecentActivities(activityPage?.content || []);
-      } catch (err) {
-        console.error('Failed to load overview data:', err);
-      } finally {
-        setLoading(false);
-      }
+ 
+async function loadStats() {
+  try {
+    const results = await Promise.allSettled([
+      focusService.getMyFocuses(),
+      activityService.getActivities(0, 5),
+      habitService.getMyHabits(),
+      goalService.getMyGoals(),
+    ]);
+
+    const [focusResult, activityResult, habitResult, goalResult] = results;
+
+    setMetrics({
+      focus: focusResult.status === 'fulfilled'
+        ? (Array.isArray(focusResult.value) ? focusResult.value.length : 0)
+        : 0,
+
+      activities: activityResult.status === 'fulfilled'
+        ? (activityResult.value?.totalElements ??
+           activityResult.value?.content?.length ?? 0)
+        : 0,
+
+      habits: habitResult.status === 'fulfilled'
+        ? (Array.isArray(habitResult.value) ? habitResult.value.length : 0)
+        : 0,
+
+      goals: goalResult.status === 'fulfilled'
+        ? (Array.isArray(goalResult.value) ? goalResult.value.length : 0)
+        : 0,
+    });
+
+    if (activityResult.status === 'fulfilled') {
+      setRecentActivities(activityResult.value?.content || []);
+    } else {
+      setRecentActivities([]);
     }
+
+    // Log individual API failures for debugging
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        console.error(`Dashboard API ${index + 1} failed:`, result.reason);
+      }
+    });
+
+  } catch (err) {
+    console.error('Failed to load overview data:', err);
+  } finally {
+    setLoading(false);
+  }
+}
+
     loadStats();
   }, []);
 

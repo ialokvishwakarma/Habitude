@@ -1,7 +1,9 @@
 import axios from 'axios';
 
 const axiosClient = axios.create({
-  baseURL: 'http://localhost:8080/api',
+  // baseURL: 'http://localhost:8080/api',
+   baseURL: 'https://habitude-backend-tsus.onrender.com/api',
+ 
   headers: {
     'Content-Type': 'application/json',
   },
