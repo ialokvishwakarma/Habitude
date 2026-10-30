@@ -33,7 +33,7 @@ axiosClient.interceptors.response.use(
 
       if (refreshToken) {
         try {
-          const res = await axios.post('http://localhost:8080/api/auth/refresh', {
+          const res = await axios.post('https://habitude-backend-tsus.onrender.com/api/auth/refresh', {
             refreshToken: refreshToken,
           });
 
