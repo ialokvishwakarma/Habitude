@@ -28,8 +28,7 @@ public class Oauth2SuccessHandler implements AuthenticationSuccessHandler {
 
         LoginResponse loginResponse = authService.handleOauth2LoginRequest(oAuth2User, "google");
 
-
-        String targetUrl = UriComponentsBuilder.fromUriString("http://localhost:5173")
+        String targetUrl = UriComponentsBuilder.fromUriString("https://habitude-eight.vercel.app")
                 .queryParam("token", loginResponse.getToken())
                 .queryParam("refreshToken", loginResponse.getRefreshToken())
                 .build().toUriString();
