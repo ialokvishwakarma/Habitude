@@ -1,7 +1,10 @@
-import React from 'react';
+
+import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 
 export default function Sidebar({ onLogout }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+
   const mainNavItems = [
     { name: 'Overview', path: '/dashboard' },
     { name: 'Focus Areas', path: '/focus' },
@@ -12,39 +15,71 @@ export default function Sidebar({ onLogout }) {
     { name: 'Recommendations', path: '/recommendations' },
   ];
 
-  return (
-    <aside className="sidebar">
-      <div className="sidebar-brand">Habitude</div>
+  const closeMenu = () => setMenuOpen(false);
 
-      <nav className="sidebar-nav">
-        {mainNavItems.map((item) => (
+  return (
+    <>
+      <div className="mobile-app-header">
+        <span className="sidebar-brand-mobile">Habitude</span>
+        <button
+          className="mobile-menu-toggle"
+          onClick={() => setMenuOpen(!menuOpen)}
+          aria-label={menuOpen ? 'Close navigation' : 'Open navigation'}
+          aria-expanded={menuOpen}
+        >
+          {menuOpen ? '✕' : '☰'}
+        </button>
+      </div>
+
+      {menuOpen && (
+        <button
+          className="sidebar-backdrop"
+          onClick={closeMenu}
+          aria-label="Close navigation"
+        />
+      )}
+
+      <aside className={`sidebar ${menuOpen ? 'sidebar-open' : ''}`}>
+        <div className="sidebar-brand">Habitude</div>
+
+        <nav className="sidebar-nav">
+          {mainNavItems.map((item) => (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              onClick={closeMenu}
+              className={({ isActive }) =>
+                `sidebar-link ${isActive ? 'sidebar-link-active' : ''}`
+              }
+            >
+              {item.name}
+            </NavLink>
+          ))}
+        </nav>
+
+        <div className="sidebar-footer">
           <NavLink
-            key={item.path}
-            to={item.path}
+            to="/profile"
+            onClick={closeMenu}
             className={({ isActive }) =>
               `sidebar-link ${isActive ? 'sidebar-link-active' : ''}`
             }
           >
-            {item.name}
+            Profile
           </NavLink>
-        ))}
-      </nav>
 
-      <div className="sidebar-footer" style={{ borderTop: '1px solid var(--border-subtle, #e2e8f0)', paddingTop: '12px' }}>
-        <NavLink
-          to="/profile"
-          className={({ isActive }) =>
-            `sidebar-link ${isActive ? 'sidebar-link-active' : ''}`
-          }
-          style={{ marginBottom: '8px' }}
-        >
-          Profile
-        </NavLink>
-
-        <button className="btn btn-outline" style={{ width: '100%' }} onClick={onLogout}>
-          Sign Out
-        </button>
-      </div>
-    </aside>
+          <button
+            className="btn btn-outline"
+            style={{ width: '100%' }}
+            onClick={() => {
+              closeMenu();
+              onLogout();
+            }}
+          >
+            Sign Out
+          </button>
+        </div>
+      </aside>
+    </>
   );
 }
